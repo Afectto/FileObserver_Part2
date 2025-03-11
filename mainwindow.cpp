@@ -1,138 +1,162 @@
 #include "mainwindow.h"
 #include <QSplitter>
-#include <QListView>
 #include <QTreeView>
-#include <QTextEdit>
+#include <QTableView>
 #include <QFileSystemModel>
 #include <QItemSelectionModel>
-#include <QVBoxLayout>
-#include <QTableView>
-#include <QHeaderView>
 #include <QStatusBar>
 #include <QDebug>
+#include <QVBoxLayout>
+#include <QLabel>
+#include "Strategy/fileliststrategy.h"
+#include "Strategy/filetypestrategy.h"
+#include "fileexplorermodel.h"
+#include "qheaderview.h"
+#include "FileModel/FileDataModel.h"
 
 MainWindow::MainWindow(QWidget *parent)
-	: //QWidget(parent)
-	  QMainWindow(parent)
+    : QMainWindow(parent)
 {
-	//Устанавливаем размер главного окна
-	this->setGeometry(100, 100, 1500, 500);
-	this->setStatusBar(new QStatusBar(this));
-	this->statusBar()->showMessage("Choosen Path: ");
-	QString homePath = QDir::homePath();
-	// Определим  файловой системы:
-	dirModel =  new QFileSystemModel(this);
-	dirModel->setFilter(QDir::NoDotAndDotDot | QDir::AllDirs);
-	dirModel->setRootPath(homePath);
+    // Настройки главного окна
+    this->setGeometry(100, 100, 1500, 500);
+    this->setStatusBar(new QStatusBar(this));
+    this->statusBar()->showMessage("Выберите папку...");
 
-	fileModel = new QFileSystemModel(this);
-	fileModel->setFilter(QDir::NoDotAndDotDot | QDir::Files);
+    QString homePath = QDir::homePath();
 
-	fileModel->setRootPath(homePath);
-	//Показать как дерево, пользуясь готовым видом:
+    // Модель дерева каталогов
+    dirModel = new QFileSystemModel(this);
+    dirModel->setFilter(QDir::NoDotAndDotDot | QDir::AllDirs);
+    dirModel->setRootPath(homePath);
 
-	treeView = new QTreeView();
-	treeView->setModel(dirModel);
+    auto fileDataModel = new FileDataModel(new FileListStrategy());
+    // Кастомная модель файлов с поддержкой стратегий
+    fileModel = new FileExplorerModel(fileDataModel,this);
+    fileModel->setRootPath(homePath);
 
-	treeView->expandAll();
-	QSplitter *splitter = new QSplitter(parent);
-	tableView = new QTableView;
-    // tableView->setModel(fileModel);
-	splitter->addWidget(treeView);
-	splitter->addWidget(tableView);
-	setCentralWidget(splitter);
+    // Виджеты
+    treeView = new QTreeView();
+    treeView->setModel(dirModel);
+    treeView->expandAll();
 
-	QItemSelectionModel *selectionModel = treeView->selectionModel();
-	QModelIndex rootIx = dirModel->index(0, 0, QModelIndex());//корневой элемент
+    tableView = new QTableView;
+    tableView->setModel(fileModel);
 
-	QModelIndex indexHomePath = dirModel->index(homePath);
-	QFileInfo fileInfo = dirModel->fileInfo(indexHomePath);
+    QWidget *centralWidget = new QWidget(this);
+    QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
+    mainLayout->setSpacing(1);
 
-	/* Рассмотрим способы обхода содержимого папок на диске.
-	 * Предлагается вариант решения, которы может быть применен для более сложных задач.
-	 * Итак, если требуется выполнить анализ содержимого папки, то необходимо организовать обход содержимого. Обход выполняем относительно модельного индекса.
-	 * Например:*/
-	if (fileInfo.isDir()) {
-		/*
-		 * Если fileInfo папка то заходим в нее, что бы просмотреть находящиеся в ней файлы.
-		 * Если нужно просмотреть все файлы, включая все вложенные папки, то нужно организовать рекурсивный обход.
-		*/
-		QDir dir  = fileInfo.dir();
+    // Верхняя панель с выпадающим списком
+    QWidget *topPanel = new QWidget(this);
+    QHBoxLayout *topLayout = new QHBoxLayout(topPanel);
 
-		if (dir.cd(fileInfo.fileName())) {
-			/**
-			 * Если зашли в папку, то пройдемся по контейнеру QFileInfoList ,полученного методом entryInfoList,
-			 * */
+    strategyComboBox = new QComboBox(this);
+    strategyComboBox->addItem("По файлам");
+    strategyComboBox->addItem("По типам");
 
-			foreach (QFileInfo inf, dir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot, QDir::Type)) {
-				qDebug() << inf.fileName() << "---" << inf.size();
-			}
+    topLayout->addWidget(new QLabel("Стратегия:"));
+    topLayout->addWidget(strategyComboBox);
 
-			dir.cdUp();//выходим из папки
-		}
-	}
+    topPanel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    topPanel->setMaximumHeight(strategyComboBox->sizeHint().height() + 20);
 
-	QDir dir = fileInfo.dir();
+    topPanel->setLayout(topLayout);
 
-	foreach (QFileInfo inf, dir.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot, QDir::Type)) {
+    // Splitter с деревом и таблицей
+    QSplitter *splitter = new QSplitter(this);
+    splitter->addWidget(treeView);
+    splitter->addWidget(tableView);
 
-		qDebug() << inf.fileName() << "---" << inf.size();
-	}
+    // Добавляем всё в основной layout
+    mainLayout->addWidget(topPanel);
+    mainLayout->addWidget(splitter);
 
+    // Устанавливаем центральный виджет
+    centralWidget->setLayout(mainLayout);
+    setCentralWidget(centralWidget);
 
-	treeView->header()->resizeSection(0, 200);
-	//Выполняем соединения слота и сигнала который вызывается когда осуществляется выбор элемента в TreeView
-	connect(selectionModel, SIGNAL(selectionChanged(const QItemSelection &, const QItemSelection &)),
-			this, SLOT(on_selectionChangedSlot(const QItemSelection &, const QItemSelection &)));
-	//Пример организации установки курсора в TreeView относит ельно модельного индекса
-	QItemSelection toggleSelection;
-	QModelIndex topLeft;
-	topLeft = dirModel->index(homePath);
-	dirModel->setRootPath(homePath);
+    // Выбор стратегии
+    strategies.append(new FileListStrategy());
+    strategies.append(new FileTypeStrategy());
 
-	toggleSelection.select(topLeft, topLeft);
-	selectionModel->select(toggleSelection, QItemSelectionModel::Toggle);
+    // Подключение сигналов
+    connect(treeView->selectionModel(), &QItemSelectionModel::selectionChanged,
+            this, &MainWindow::on_selectionChangedSlot);
+    connect(strategyComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::on_strategyChanged);
+
+    // Выбор стратегии по умолчанию
+    on_strategyChanged(0);
 }
-//Слот для обработки выбора элемента в TreeView
-//выбор осуществляется с помощью курсора
 
 void MainWindow::on_selectionChangedSlot(const QItemSelection &selected, const QItemSelection &deselected)
 {
-	//Q_UNUSED(selected);
-	Q_UNUSED(deselected);
-	QModelIndex index = treeView->selectionModel()->currentIndex();
-	QModelIndexList indexs =  selected.indexes();
-	QString filePath = "";
+    Q_UNUSED(selected);
+    Q_UNUSED(deselected);
 
-	// Размещаем инфо в statusbar относительно выделенного модельного индекса
+    QModelIndex index = treeView->selectionModel()->currentIndex();
+    if (!index.isValid()) return;
 
-	if (indexs.count() >= 1) {
-		QModelIndex ix =  indexs.constFirst();
-		filePath = dirModel->filePath(ix);
-		this->statusBar()->showMessage("Выбранный путь : " + dirModel->filePath(indexs.constFirst()));
-	}
+    QString filePath = dirModel->filePath(index);
+    this->statusBar()->showMessage("Выбранный путь: " + filePath);
+    updateTreeViewColumnWidth();
+    // Обновляем корневой путь модели файлов
+    fileModel->setRootPath(filePath);
 
-	//TODO: !!!!!
-	/*
-	Тут простейшая обработка ширины первого столбца относительно длины названия папки.
-	Это для удобства, что бы при выборе папки имя полностью отображалась в  первом столбце.
-	Требуется доработка(переработка).
-	*/
-	int length = 200;
-	int dx = 30;
+    updateColumnWidth();
+}
 
-	if (dirModel->fileName(index).length() * dx > length) {
-		length = length + dirModel->fileName(index).length() * dx;
-		qDebug() << "r = " << index.row() << "c = " << index.column() << dirModel->fileName(index) << dirModel->fileInfo(
-					 index).size();
+void MainWindow::updateTreeViewColumnWidth()
+{
+    if (!dirModel || !treeView) return;
 
-	}
+    QFontMetrics metrics(treeView->font());
 
-	treeView->header()->resizeSection(index.column(), length + dirModel->fileName(index).length());
-	tableView->setRootIndex(fileModel->setRootPath(filePath));
+    int maxWidth = 100; // Минимальная ширина
+    for (int row = 0; row < dirModel->rowCount(QModelIndex()); ++row) {
+        QModelIndex index = dirModel->index(row, 0);
+        QString text = dirModel->data(index, Qt::DisplayRole).toString();
+        int textWidth = metrics.horizontalAdvance(text) + 40; // Добавляем отступ
+
+        QRect rect = treeView->visualRect(index);
+        int indentation = rect.x(); // Учитываем отступ для вложенных элементов
+
+        int totalWidth = textWidth + indentation;
+        if (totalWidth > maxWidth) {
+            maxWidth = totalWidth;
+        }
+    }
+
+    treeView->header()->resizeSection(0, maxWidth);
+}
+
+void MainWindow::on_strategyChanged(int index)
+{
+    if (index < 0 || index >= strategies.size()) return;
+
+    ISizeCalculationStrategy *strategy = strategies[index];
+    fileModel->setStrategy(strategy);
+    QModelIndex selectedIndex = treeView->selectionModel()->currentIndex();
+    if (selectedIndex.isValid()) {
+        QString selectedPath = dirModel->filePath(selectedIndex);
+        fileModel->setRootPath(selectedPath); // Обновляем путь модели файлов
+    }
+
+    updateColumnWidth();
+}
+
+void MainWindow::updateColumnWidth()
+{
+    if (!fileModel || !tableView) return;
+
+    int maxWidth = static_cast<FileExplorerModel*>(fileModel)->getMaxColumnWidth();
+    tableView->setColumnWidth(0, maxWidth);
 }
 
 MainWindow::~MainWindow()
 {
-
+    for (auto strategy : strategies) {
+        delete strategy;
+    }
 }

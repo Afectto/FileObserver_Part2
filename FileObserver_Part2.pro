@@ -9,13 +9,25 @@ CONFIG += c++17
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
+        FileModel/filedatamodel.cpp \
         main.cpp \
         mainwindow.cpp \
-    fileexplorermodel.cpp
+        FileModel/fileexplorermodel.cpp \
+        Strategy/basesizecalculationstrategy.cpp \
+        Strategy/fileliststrategy.cpp \
+        Strategy/filetypestrategy.cpp \
+        Strategy/strategyoutputhandler.cpp
 
 HEADERS += \
+        FileModel/filedatamodel.h \
+        FileModel/ifiledatamodel.h \
         mainwindow.h \
-    fileexplorermodel.h
+        FileModel/fileexplorermodel.h \
+        Strategy/basesizecalculationstrategy.h \
+        Strategy/fileliststrategy.h \
+        Strategy/filetypestrategy.h \
+        Strategy/isizecalculationstrategy.h \
+        Strategy/strategyoutputhandler.h
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
