@@ -10,7 +10,6 @@
 #include <QLabel>
 #include "Strategy/fileliststrategy.h"
 #include "Strategy/filetypestrategy.h"
-#include "fileexplorermodel.h"
 #include "qheaderview.h"
 #include "FileModel/FileDataModel.h"
 
@@ -32,7 +31,6 @@ MainWindow::MainWindow(QWidget *parent)
     auto fileDataModel = new FileDataModel(new FileListStrategy());
     // Кастомная модель файлов с поддержкой стратегий
     fileModel = new FileExplorerModel(fileDataModel,this);
-    fileModel->setRootPath(homePath);
 
     // Виджеты
     treeView = new QTreeView();
