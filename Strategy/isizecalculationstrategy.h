@@ -1,6 +1,9 @@
 #ifndef ISIZECALCULATIONSTRATEGY_H
 #define ISIZECALCULATIONSTRATEGY_H
 
+#include <QMap>
+#include <QDebug>
+#include <QPair>
 #include <QString>
 
 
